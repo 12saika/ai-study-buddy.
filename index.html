@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Study Buddy</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<h1>📚 AI Study Buddy</h1>
+
+<form method="POST">
+    <textarea name="topic" placeholder="Enter topic or paste notes"></textarea>
+    <br>
+    <button type="submit">Explain</button>
+</form>
+
+<div class="output">
+    <h3>Explanation:</h3>
+    <p>{{ result }}</p>
+</div>
+
+</body>
+</html>
