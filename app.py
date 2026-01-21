@@ -1,19 +1,19 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 from fpdf import FPDF
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="AI Study Buddy (Line-by-Line PDF Explanation)",
+    page_title="AI Study Buddy (Offline & Free)",
     layout="wide"
 )
 
-# ---------------- LOAD MODEL ----------------
+# ---------------- LOAD LOCAL MODEL ----------------
 @st.cache_resource(show_spinner=True)
 def load_model():
-    model_name = "google/flan-t5-small"  # lightweight; change to flan-t5-base for longer notes
+    model_name = "google/flan-t5-base"  # FREE, LOCAL, STABLE
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     return tokenizer, model
@@ -33,26 +33,38 @@ menu = st.sidebar.radio(
     "Navigation",
     ["Upload PDF", "Upload Notes", "Ask Questions"]
 )
+
 st.sidebar.markdown("---")
-st.sidebar.subheader("🕘 Search History")
-if st.session_state.history:
-    for q in st.session_state.history[::-1]:
-        st.sidebar.write("•", q)
-else:
-    st.sidebar.write("No searches yet")
+st.sidebar.subheader("🕘 Question History")
+for q in st.session_state.history[::-1]:
+    st.sidebar.write("•", q)
 
 # ---------------- MAIN TITLE ----------------
-st.title("📚 AI Study Buddy")
-st.write("Upload study material. AI explains **every line** in detail for full understanding.")
+st.title("📚 AI Study Buddy (FREE & OFFLINE)")
+st.write(
+    "This app explains study material **paragraph-wise** using a "
+    "**local AI model** (no API, no cost)."
+)
 
 # ---------------- AI FUNCTION ----------------
-def ask_ai(prompt, max_len=512):
-    """Get detailed answer from local Flan-T5 model"""
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+def ask_ai(prompt, max_len=256):
+    inputs = tokenizer(
+        prompt,
+        return_tensors="pt",
+        truncation=True,
+        max_length=512
+    )
+
     with torch.no_grad():
-        outputs = model.generate(**inputs, max_length=max_len)
-    answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return answer
+        outputs = model.generate(
+            **inputs,
+            max_length=max_len,
+            num_beams=4,
+            repetition_penalty=1.5,
+            early_stopping=True
+        )
+
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 # ---------------- PDF READER ----------------
 def read_pdf(uploaded_pdf):
@@ -64,17 +76,36 @@ def read_pdf(uploaded_pdf):
             text += page_text + "\n"
     return text
 
-# ---------------- LINE-BY-LINE EXPLANATION ----------------
-def explain_line_by_line(text):
-    """Explain every line of text in detail"""
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    detailed_notes = ""
-    for idx, line in enumerate(lines):
-        # Prompt AI to explain a single line in long notes form
-        prompt = f"Explain this line in detail for a student. Use simple words and give examples if needed:\n\n{line}"
+# ---------------- PARAGRAPH SPLITTER ----------------
+def split_paragraphs(text):
+    return [p.strip() for p in text.split("\n\n") if len(p.strip()) > 40]
+
+# ---------------- PARAGRAPH EXPLANATION ----------------
+def explain_paragraphs(text):
+    paragraphs = split_paragraphs(text)
+    output = ""
+
+    for i, para in enumerate(paragraphs, start=1):
+        prompt = f"""
+You are an expert academic tutor.
+Explain the following paragraph clearly and simply.
+Do NOT invent examples.
+Do NOT add unrelated objects.
+Explain only the meaning.
+
+Paragraph:
+{para}
+"""
         explanation = ask_ai(prompt)
-        detailed_notes += f"Line {idx+1}: {line}\nExplanation: {explanation}\n\n"
-    return detailed_notes
+
+        output += (
+            f"Paragraph {i}:\n"
+            f"{para}\n\n"
+            f"Explanation:\n{explanation}\n\n"
+            f"{'-'*60}\n\n"
+        )
+
+    return output
 
 # ================= UPLOAD PDF =================
 if menu == "Upload PDF":
@@ -84,69 +115,59 @@ if menu == "Upload PDF":
     if uploaded_pdf:
         text = read_pdf(uploaded_pdf)
         st.session_state.content_text = text
-        st.success(f"✅ PDF uploaded successfully ({len(text.split())} words)")
 
-        with st.spinner("📖 AI is explaining PDF line by line..."):
-            full_explanation = explain_line_by_line(text)
+        st.success("✅ PDF uploaded successfully")
 
-        st.subheader("🧠 Detailed PDF Explanation")
-        st.write(full_explanation)
+        with st.spinner("🧠 Explaining paragraph-wise..."):
+            explanation = explain_paragraphs(text)
 
-        # ---------------- DOWNLOAD PDF ----------------
-        if st.button("Download PDF Notes"):
+        st.subheader("📘 Paragraph-wise Explanation")
+        st.text_area("Output", explanation, height=550)
+
+        if st.button("📥 Download Explanation PDF"):
             pdf = FPDF()
             pdf.add_page()
-            pdf.set_font("Arial", size=12)
-            for line in full_explanation.split("\n"):
-                pdf.multi_cell(0, 8, line)
-            pdf.output("pdf_detailed_notes.pdf")
-            st.success("📄 Notes saved as pdf_detailed_notes.pdf")
+            pdf.set_font("Arial", size=11)
+
+            for line in explanation.split("\n"):
+                pdf.multi_cell(0, 7, line)
+
+            pdf.output("AI_Study_Buddy_Explanation.pdf")
+            st.success("📄 PDF downloaded successfully")
 
 # ================= UPLOAD NOTES =================
 elif menu == "Upload Notes":
-    st.subheader("📝 Paste Your Notes")
-    notes = st.text_area(
-        "Paste your notes here",
-        height=250,
-        placeholder="Paste handwritten or typed notes..."
-    )
+    st.subheader("📝 Paste Notes")
+    notes = st.text_area("Paste your notes here", height=250)
 
-    if st.button("Explain Notes Line by Line"):
-        if notes.strip() == "":
+    if st.button("Explain Notes"):
+        if not notes.strip():
             st.warning("Please paste notes first.")
         else:
             st.session_state.content_text = notes
-            with st.spinner("📘 AI is explaining your notes line by line..."):
-                detailed_notes = explain_line_by_line(notes)
-            st.subheader("🧠 Detailed Notes Explanation")
-            st.write(detailed_notes)
 
-            # Download PDF
-            if st.button("Download Notes PDF"):
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", size=12)
-                for line in detailed_notes.split("\n"):
-                    pdf.multi_cell(0, 8, line)
-                pdf.output("notes_detailed.pdf")
-                st.success("📄 Notes saved as notes_detailed.pdf")
+            with st.spinner("🧠 Explaining paragraph-wise..."):
+                explanation = explain_paragraphs(notes)
+
+            st.subheader("📘 Explanation")
+            st.text_area("Output", explanation, height=550)
 
 # ================= ASK QUESTIONS =================
 elif menu == "Ask Questions":
-    st.subheader("❓ Ask Questions from Material")
-    if st.session_state.content_text == "":
+    st.subheader("❓ Ask Questions")
+
+    if not st.session_state.content_text:
         st.warning("Upload PDF or Notes first.")
     else:
-        question = st.text_area("Ask your question")
+        question = st.text_area("Enter your question")
+
         if st.button("Get Answer"):
-            if question.strip() == "":
-                st.warning("Please enter a question.")
-            else:
-                st.session_state.history.append(question)
-                with st.spinner("🤖 AI is answering..."):
-                    prompt = f"""
-Answer the question using ONLY the content below. 
-If answer is not found, say so clearly.
+            st.session_state.history.append(question)
+
+            prompt = f"""
+Answer the question using ONLY the content below.
+If the answer is not present, say:
+"Answer not found in the provided material."
 
 Content:
 {st.session_state.content_text}
@@ -154,9 +175,11 @@ Content:
 Question:
 {question}
 """
-                    answer = ask_ai(prompt)
-                st.subheader("✅ Answer")
-                st.write(answer)
+            with st.spinner("🤖 Thinking..."):
+                answer = ask_ai(prompt)
+
+            st.subheader("✅ Answer")
+            st.write(answer)
 
 # ---------------- FOOTER ----------------
 st.markdown("---")
