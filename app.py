@@ -119,7 +119,6 @@ def generate_pdf(text):
     pdf = FPDF()
     pdf.add_page()
 
-    # Unicode font (must be in same folder as app.py)
     font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
     pdf.add_font("DejaVu", "", font_path, uni=True)
     pdf.set_font("DejaVu", size=11)
@@ -149,7 +148,6 @@ if menu == "Upload PDF":
     if uploaded_pdf:
         text = read_pdf(uploaded_pdf)
         st.session_state.content_text = text
-
         st.success("✅ PDF uploaded successfully")
 
         with st.spinner("🧠 Explaining paragraph-wise..."):
@@ -160,7 +158,7 @@ if menu == "Upload PDF":
 
         if st.button("📄 Generate Explanation PDF"):
             pdf = generate_pdf(explanation)
-            st.session_state.pdf_bytes = pdf.output(dest="S").encode("latin-1")
+            st.session_state.pdf_bytes = pdf.output(dest="S")
             st.session_state.pdf_ready = True
 
         if st.session_state.pdf_ready:
