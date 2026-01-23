@@ -108,18 +108,30 @@ Paragraph:
 
     return output
 
-# ---------------- SAFE PDF GENERATOR (UNICODE FIX) ----------------
+# ---------------- SAFE PDF GENERATOR ----------------
 def generate_pdf(text):
     pdf = FPDF()
     pdf.add_page()
 
-    # Use Unicode font
+    # Unicode font (must be in same folder)
     font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
     pdf.add_font("DejaVu", "", font_path, uni=True)
     pdf.set_font("DejaVu", size=11)
 
-    for line in text.split("\n"):
-        pdf.multi_cell(0, 7, line)
+    page_width = pdf.w - 2 * pdf.l_margin
+
+    for raw_line in text.split("\n"):
+        line = raw_line.strip()
+
+        if not line:
+            pdf.ln(4)
+            continue
+
+        try:
+            pdf.multi_cell(page_width, 7, line)
+        except Exception:
+            safe_line = line.encode("utf-8", "ignore").decode("utf-8")
+            pdf.multi_cell(page_width, 7, safe_line)
 
     return pdf
 
@@ -131,6 +143,7 @@ if menu == "Upload PDF":
     if uploaded_pdf:
         text = read_pdf(uploaded_pdf)
         st.session_state.content_text = text
+
         st.success("✅ PDF uploaded successfully")
 
         with st.spinner("🧠 Explaining paragraph-wise..."):
