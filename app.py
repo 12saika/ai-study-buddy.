@@ -3,6 +3,7 @@ from pypdf import PdfReader
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 from fpdf import FPDF
+import os
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -13,7 +14,7 @@ st.set_page_config(
 # ---------------- LOAD LOCAL MODEL ----------------
 @st.cache_resource(show_spinner=True)
 def load_model():
-    model_name = "google/flan-t5-base"  # FREE, LOCAL, STABLE
+    model_name = "google/flan-t5-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     return tokenizer, model
@@ -107,6 +108,21 @@ Paragraph:
 
     return output
 
+# ---------------- SAFE PDF GENERATOR (UNICODE FIX) ----------------
+def generate_pdf(text):
+    pdf = FPDF()
+    pdf.add_page()
+
+    # Use Unicode font
+    font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+    pdf.add_font("DejaVu", "", font_path, uni=True)
+    pdf.set_font("DejaVu", size=11)
+
+    for line in text.split("\n"):
+        pdf.multi_cell(0, 7, line)
+
+    return pdf
+
 # ================= UPLOAD PDF =================
 if menu == "Upload PDF":
     st.subheader("📄 Upload PDF")
@@ -115,7 +131,6 @@ if menu == "Upload PDF":
     if uploaded_pdf:
         text = read_pdf(uploaded_pdf)
         st.session_state.content_text = text
-
         st.success("✅ PDF uploaded successfully")
 
         with st.spinner("🧠 Explaining paragraph-wise..."):
@@ -125,13 +140,7 @@ if menu == "Upload PDF":
         st.text_area("Output", explanation, height=550)
 
         if st.button("📥 Download Explanation PDF"):
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", size=11)
-
-            for line in explanation.split("\n"):
-                pdf.multi_cell(0, 7, line)
-
+            pdf = generate_pdf(explanation)
             pdf.output("AI_Study_Buddy_Explanation.pdf")
             st.success("📄 PDF downloaded successfully")
 
