@@ -3,6 +3,7 @@ from pypdf import PdfReader
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 from fpdf import FPDF
+from io import BytesIO
 import os
 
 # ---------------- PAGE CONFIG ----------------
@@ -27,12 +28,6 @@ if "content_text" not in st.session_state:
 
 if "history" not in st.session_state:
     st.session_state.history = []
-
-if "pdf_ready" not in st.session_state:
-    st.session_state.pdf_ready = False
-
-if "pdf_bytes" not in st.session_state:
-    st.session_state.pdf_bytes = None
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.title("📘 AI Study Buddy")
@@ -148,6 +143,7 @@ if menu == "Upload PDF":
     if uploaded_pdf:
         text = read_pdf(uploaded_pdf)
         st.session_state.content_text = text
+
         st.success("✅ PDF uploaded successfully")
 
         with st.spinner("🧠 Explaining paragraph-wise..."):
@@ -158,13 +154,14 @@ if menu == "Upload PDF":
 
         if st.button("📄 Generate Explanation PDF"):
             pdf = generate_pdf(explanation)
-            st.session_state.pdf_bytes = pdf.output(dest="S")
-            st.session_state.pdf_ready = True
 
-        if st.session_state.pdf_ready:
+            buffer = BytesIO()
+            pdf.output(buffer)
+            pdf_bytes = buffer.getvalue()
+
             st.download_button(
                 label="⬇️ Download Explanation PDF",
-                data=st.session_state.pdf_bytes,
+                data=pdf_bytes,
                 file_name="AI_Study_Buddy_Explanation.pdf",
                 mime="application/pdf"
             )
