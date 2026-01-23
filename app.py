@@ -28,6 +28,12 @@ if "content_text" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
+if "pdf_ready" not in st.session_state:
+    st.session_state.pdf_ready = False
+
+if "pdf_bytes" not in st.session_state:
+    st.session_state.pdf_bytes = None
+
 # ---------------- SIDEBAR ----------------
 st.sidebar.title("📘 AI Study Buddy")
 menu = st.sidebar.radio(
@@ -113,7 +119,7 @@ def generate_pdf(text):
     pdf = FPDF()
     pdf.add_page()
 
-    # Unicode font (must be in same folder)
+    # Unicode font (must be in same folder as app.py)
     font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
     pdf.add_font("DejaVu", "", font_path, uni=True)
     pdf.set_font("DejaVu", size=11)
@@ -152,10 +158,18 @@ if menu == "Upload PDF":
         st.subheader("📘 Paragraph-wise Explanation")
         st.text_area("Output", explanation, height=550)
 
-        if st.button("📥 Download Explanation PDF"):
+        if st.button("📄 Generate Explanation PDF"):
             pdf = generate_pdf(explanation)
-            pdf.output("AI_Study_Buddy_Explanation.pdf")
-            st.success("📄 PDF downloaded successfully")
+            st.session_state.pdf_bytes = pdf.output(dest="S").encode("latin-1")
+            st.session_state.pdf_ready = True
+
+        if st.session_state.pdf_ready:
+            st.download_button(
+                label="⬇️ Download Explanation PDF",
+                data=st.session_state.pdf_bytes,
+                file_name="AI_Study_Buddy_Explanation.pdf",
+                mime="application/pdf"
+            )
 
 # ================= UPLOAD NOTES =================
 elif menu == "Upload Notes":
